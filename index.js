@@ -85,7 +85,7 @@ TCPserver.on('connection', function(sock) {
 
     switch (code) {
       case "PING":
-        console.log("Ping Received")
+        //console.log("Ping Received")
         sock.write('PONG\n');
         break;
       case "CHAT":
@@ -103,6 +103,12 @@ TCPserver.on('connection', function(sock) {
           }
         });
         break;
+      case "QUIT":
+        let index = sockets.findIndex(function(o) {
+          return o.remoteAddress === sock.remoteAddress && o.remotePort === sock.remotePort;
+        })
+        if (index !== -1) sockets.splice(index, 1);
+        console.log('CLOSED: ' + sock.remoteAddress + ' ' + sock.remotePort);
       case "U-VI":
       case "U-VE":
       case "U-VN":
