@@ -104,6 +104,7 @@ TCPserver.on('connection', function(sock) {
         });
         break;
       case "QUIT":
+      case "2001":
         let index = sockets.findIndex(function(o) {
           return o.remoteAddress === sock.remoteAddress && o.remotePort === sock.remotePort;
         })
