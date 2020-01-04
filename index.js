@@ -89,7 +89,9 @@ TCPserver.on('connection', function(sock) {
         sock.write('PONG\n');
         break;
       case "CHAT":
-        sock.write(data+'\n');
+        sockets.forEach(function(socket, index, array) { // Send update to all clients
+          sock.write(data+'\n');
+        });
         break;
       case "MAPS":
         map = message;
