@@ -146,6 +146,12 @@ TCPserver.on('connection', function(sock) {
         break;
       default:
         console.log('Unknown / unhandled data: ' + sock.remoteAddress + ': ' + data);
+        players.forEach(function(player, index, array) {
+          if (player.currentVehID != message && player.remoteAddress == sock.remoteAddress && player.remotePort == sock.remotePort) {
+            console.log("Player Found ("+player.id+"), updating current vehile("+message+")");
+            player.currentVehID = message;
+          }
+        });
     }
     sockets.forEach(function(sock, index, array) {
       //sock.write(sock.remoteAddress + ':' + sock.remotePort + " said " + data + '\n');
