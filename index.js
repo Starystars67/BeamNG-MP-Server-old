@@ -90,7 +90,7 @@ TCPserver.on('connection', function(sock) {
         break;
       case "CHAT":
         sockets.forEach(function(socket, index, array) { // Send update to all clients
-          sock.write(data+'\n');
+          socket.write(data+'\n');
         });
         break;
       case "MAPS":
