@@ -4,6 +4,7 @@ var map = "";
 const net = require('net');
 const uuidv4 = require('uuid/v4');
 const args = require('minimist')(process.argv.slice(2));
+const chalk = require("chalk")
 //console.log(args.port)
 if (args.port) {
   var tcpport = args.port;
@@ -34,7 +35,7 @@ wss.on('connection', function connection(ws) {
 
   ws.send('Welcome!');
 });
-console.log('[WS]  Server listening on 0.0.0.0:' + wsport);
+console.log(chalk.cyan('[WS]')+'  Server listening on 0.0.0.0:' + wsport);
 
 //==========================================================
 //              TCP Server
@@ -42,7 +43,7 @@ console.log('[WS]  Server listening on 0.0.0.0:' + wsport);
 
 const TCPserver = net.createServer();
 TCPserver.listen(tcpport, () => {
-  console.log('[TCP] Server listening on 0.0.0.0:' + tcpport);
+  console.log(chalk.green('[TCP]')+' Server listening on 0.0.0.0:' + tcpport);
 });
 
 let sockets = [];
@@ -50,7 +51,7 @@ let players = [];
 let vehicles = [];
 
 TCPserver.on('connection', function(sock) {
-  console.log('[TCP] CONNECTED: ' + sock.remoteAddress + ':' + sock.remotePort);
+  console.log(chalk.green('[TCP]')+' CONNECTED: ' + sock.remoteAddress + ':' + sock.remotePort);
   sockets.push(sock);
 
   var player = {};
@@ -79,9 +80,9 @@ TCPserver.on('connection', function(sock) {
     if (code != "PING") {
       console.log(code)
   	}
-  	if (data.length > 4) {
-  	  console.log(data.length)
-  	}
+  	//if (data.length > 4) {
+  	  //console.log(data.length)
+  	//}
 
     switch (code) {
       case "PING":
@@ -101,7 +102,7 @@ TCPserver.on('connection', function(sock) {
         players.forEach(function(player, index, array) {
           if (player.nickname == "" && player.remoteAddress == sock.remoteAddress && player.remotePort == sock.remotePort) {
             console.log("Player Found ("+player.id+"), setting nickname("+data.substr(4)+")");
-            player.nickname = data.substr(4);
+            player.nickname = toString(data.substr(4));
           }
         });
         break;
@@ -141,7 +142,7 @@ TCPserver.on('connection', function(sock) {
         console.log(message)
         players.forEach(function(player, index, array) {
           if (player.currentVehID != message && player.remoteAddress == sock.remoteAddress && player.remotePort == sock.remotePort) {
-            console.log("Player Found ("+player.id+"), updating current vehile("+message+")");
+            console.log(chalk.green('[TCP]')+" Player Found ("+player.id+"), updating current vehile("+message+")");
             player.currentVehID = message;
           }
         });
@@ -150,7 +151,7 @@ TCPserver.on('connection', function(sock) {
         console.log('Unknown / unhandled data: ' + sock.remoteAddress + ': ' + data);
         players.forEach(function(player, index, array) {
           if (player.currentVehID != message && player.remoteAddress == sock.remoteAddress && player.remotePort == sock.remotePort) {
-            console.log("Player Found ("+player.id+"), updating current vehile("+message+")");
+            console.log(chalk.green('[TCP]')+" Player Found ("+player.id+"), updating current vehile("+message+")");
             player.currentVehID = message;
           }
         });
@@ -171,8 +172,14 @@ TCPserver.on('connection', function(sock) {
 
   sock.on('error', (err) => {
     // handle errors here
-    if (err == "ECONNRESET") {
-      console.error("Connection Reset!")
+    if (err.code == "ECONNRESET") {
+      console.error(chalk.red("ERROR ")+"Connection Reset for player: ");
+      players.forEach(function(player, index, array) {
+        if (player.remoteAddress == sock.remoteAddress && player.remotePort == sock.remotePort) {
+          console.error(+player.nickname+" ("+player.id+")");
+          console.error(chalk.red("ERROR ")+"End Error.");
+        }
+      });
     } else {
       console.error("Sock Error");
       console.error(err);
@@ -201,7 +208,7 @@ function UDPsend(message, info) {
 
 UDPserver.on('listening', function() {
   var address = UDPserver.address();
-  console.log('[UDP] Server listening on ' + address.address + ':' + address.port);
+  console.log(chalk.rgb(123, 45, 67)('[UDP]')+' Server listening on ' + address.address + ':' + address.port);
 });
 
 var UDPMembers = [];
@@ -216,8 +223,8 @@ UDPserver.on('message',function(msg,info){
     UDPsend("PONG", info)
     break;
     default:
-    console.log('[UDP] Data received from client : ' + msg.toString());
-    console.log('Received %d bytes from %s:%d\n',msg.length, info.address, info.port);
+    console.log(chalk.rgb(123, 45, 67)('[UDP]')+' Data received from client : ' + msg.toString());
+    console.log(chalk.rgb(123, 45, 67)('[UDP]')+' Received %d bytes from %s:%d\n',msg.length, info.address, info.port);
   }
 });
 
