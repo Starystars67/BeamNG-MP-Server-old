@@ -160,7 +160,9 @@ TCPserver.on('connection', function(sock) {
         console.log(chalk.green('[TCP]')+' Unknown / unhandled data from:' + sock.remoteAddress);
         console.log(chalk.green('[TCP]')+' Data -> ' + data);
         sockets.forEach(function(socket, index, array) { // Send update to all clients
-          socket.write(data+'\n');
+          if ((sock.remoteAddress != socket.remoteAddress && sock.remotePort != socket.remotePort) || (sock.remoteAddress == socket.remoteAddress && sock.remotePort != socket.remotePort)) {
+            socket.write(data+'\n');
+          }
         });
         break;
     }
