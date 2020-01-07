@@ -157,10 +157,10 @@ TCPserver.on('connection', function(sock) {
         });
         break;
       default:
-        console.log('Unknown / unhandled data: ' + sock.remoteAddress + ': ' + data);
+        console.log(chalk.green('[TCP]')+' Unknown / unhandled data from:' + sock.remoteAddress);
         players.forEach(function(player, index, array) {
           if (player.currentVehID != message && player.remoteAddress == sock.remoteAddress && player.remotePort == sock.remotePort) {
-            console.log(chalk.green('[TCP]')+" Player Found ("+player.id+"), updating current vehile("+message+")");
+            console.log(chalk.green('[TCP]')+' Data -> ' + data);
             player.currentVehID = message;
           }
         });
@@ -173,11 +173,11 @@ TCPserver.on('connection', function(sock) {
 
   // Add a 'close' event handler to this instance of socket
   sock.on('close', function(data) {
-    let index = players.findIndex(function(o) {
+    var index = players.findIndex(function(o) {
       return o.remoteAddress === sock.remoteAddress && o.remotePort === sock.remotePort;
     })
     if (index !== -1) sockets.splice(index, 1);
-    let index = sockets.findIndex(function(o) {
+     index = sockets.findIndex(function(o) {
       return o.remoteAddress === sock.remoteAddress && o.remotePort === sock.remotePort;
     })
     if (index !== -1) sockets.splice(index, 1);
