@@ -48,6 +48,7 @@ TCPserver.listen(tcpport, () => {
 
 let sockets = [];
 let players = [];
+let names = [];
 let vehicles = [];
 
 TCPserver.on('connection', function(sock) {
@@ -57,11 +58,14 @@ TCPserver.on('connection', function(sock) {
   var player = {};
   player.remoteAddress = sock.remoteAddress;
   player.remotePort = sock.remotePort;
-  player.nickname = "";
+  player.nickname = "New User, Loading...";
   player.id = uuidv4();
   player.currentVehID = 0;
 
   players.push(player);
+  sockets.forEach(function(socket, index, array) { // Send update to all clients
+    socket.write('PLST'+JSON.stringify(players)+'\n');
+  });
 
   sock.write('HOLA'+player.id+'\n');
   if (map == "") {
@@ -98,11 +102,17 @@ TCPserver.on('connection', function(sock) {
         map = message;
         console.log("Setting map to: "+map);
         sock.write("MAPC"+map+'\n');
+        break;
       case "USER":
+      console.log(players);
         players.forEach(function(player, index, array) {
-          if (player.nickname == "" && player.remoteAddress == sock.remoteAddress && player.remotePort == sock.remotePort) {
+          if (player.remoteAddress == sock.remoteAddress && player.remotePort == sock.remotePort) {
             console.log("Player Found ("+player.id+"), setting nickname("+data.substr(4)+")");
-            player.nickname = toString(data.substr(4));
+            player.nickname = ""+data.substr(4)+"";
+      console.log(players);
+            sockets.forEach(function(socket, index, array) { // Send update to all clients
+              socket.write('PLST'+JSON.stringify(players)+'\n');
+            });
           }
         });
         break;
@@ -113,6 +123,7 @@ TCPserver.on('connection', function(sock) {
         })
         if (index !== -1) sockets.splice(index, 1);
         console.log('CLOSED: ' + sock.remoteAddress + ' ' + sock.remotePort);
+        break;
       case "U-VI":
       case "U-VE":
       case "U-VN":
@@ -155,6 +166,7 @@ TCPserver.on('connection', function(sock) {
             player.currentVehID = message;
           }
         });
+        break;
     }
     sockets.forEach(function(sock, index, array) {
       //sock.write(sock.remoteAddress + ':' + sock.remotePort + " said " + data + '\n');
@@ -163,11 +175,18 @@ TCPserver.on('connection', function(sock) {
 
   // Add a 'close' event handler to this instance of socket
   sock.on('close', function(data) {
+    let index = players.findIndex(function(o) {
+      return o.remoteAddress === sock.remoteAddress && o.remotePort === sock.remotePort;
+    })
+    if (index !== -1) sockets.splice(index, 1);
     let index = sockets.findIndex(function(o) {
       return o.remoteAddress === sock.remoteAddress && o.remotePort === sock.remotePort;
     })
     if (index !== -1) sockets.splice(index, 1);
     console.log('CLOSED: ' + sock.remoteAddress + ' ' + sock.remotePort);
+    sockets.forEach(function(socket, index, array) { // Send update to all clients
+      socket.write('PLST'+JSON.stringify(players)+'\n');
+    });
   });
 
   sock.on('error', (err) => {
