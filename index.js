@@ -158,11 +158,9 @@ TCPserver.on('connection', function(sock) {
         break;
       default:
         console.log(chalk.green('[TCP]')+' Unknown / unhandled data from:' + sock.remoteAddress);
-        players.forEach(function(player, index, array) {
-          if (player.currentVehID != message && player.remoteAddress == sock.remoteAddress && player.remotePort == sock.remotePort) {
-            console.log(chalk.green('[TCP]')+' Data -> ' + data);
-            player.currentVehID = message;
-          }
+        console.log(chalk.green('[TCP]')+' Data -> ' + data);
+        sockets.forEach(function(socket, index, array) { // Send update to all clients
+          socket.write(data+'\n');
         });
         break;
     }
