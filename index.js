@@ -104,12 +104,10 @@ TCPserver.on('connection', function(sock) {
         sock.write("MAPC"+map+'\n');
         break;
       case "USER":
-      console.log(players);
         players.forEach(function(player, index, array) {
           if (player.remoteAddress == sock.remoteAddress && player.remotePort == sock.remotePort) {
             console.log("Player Found ("+player.id+"), setting nickname("+data.substr(4)+")");
             player.nickname = ""+data.substr(4)+"";
-      console.log(players);
             sockets.forEach(function(socket, index, array) { // Send update to all clients
               socket.write('PLST'+JSON.stringify(players)+'\n');
             });
