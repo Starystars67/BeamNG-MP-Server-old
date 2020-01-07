@@ -135,9 +135,9 @@ TCPserver.on('connection', function(sock) {
         //console.log("Got Update to send!")
         sockets.forEach(function(socket, index, array) { // Send update to all clients
           //console.log(socket.remotePort+' != '+sock.remotePort+' Is not the same so we should send?')
-          //if ((sock.remoteAddress != socket.remoteAddress && sock.remotePort != socket.remotePort) || (sock.remoteAddress == socket.remoteAddress && sock.remotePort != socket.remotePort)) {
+          if ((sock.remoteAddress != socket.remoteAddress && sock.remotePort != socket.remotePort) || (sock.remoteAddress == socket.remoteAddress && sock.remotePort != socket.remotePort)) {
             socket.write(data+'\n');
-          //}
+          }
         });
         //}
         //});
