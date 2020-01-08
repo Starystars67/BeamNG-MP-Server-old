@@ -1,5 +1,6 @@
 // Server Settings!
 var map = "";
+let _VERSION = "0.0.1"
 
 const net = require('net');
 const uuidv4 = require('uuid/v4');
@@ -73,6 +74,7 @@ TCPserver.on('connection', function(sock) {
   } else {
     sock.write("MAPC"+map+'\n')
   }
+  sock.write("VCHK"+_VERSION+'\n')
 
   sock.on('data', function(data) {
     // Write the data back to all the connected, the client will receive it as data from the server
