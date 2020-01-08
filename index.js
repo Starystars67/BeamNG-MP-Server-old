@@ -1,6 +1,6 @@
 // Server Settings!
 var map = "";
-let _VERSION = "0.0.1"
+let _VERSION = "0.0.2"
 
 const net = require('net');
 const uuidv4 = require('uuid/v4');
@@ -84,7 +84,7 @@ TCPserver.on('connection', function(sock) {
     var message = data.substr(4);
 
     if (code != "PING") {
-      console.log(code)
+      //console.log(code)
   	}
   	//if (data.length > 4) {
   	  //console.log(data.length)
@@ -112,6 +112,7 @@ TCPserver.on('connection', function(sock) {
             player.nickname = ""+data.substr(4)+"";
             sockets.forEach(function(socket, index, array) { // Send update to all clients
               socket.write('PLST'+JSON.stringify(players)+'\n');
+              socket.write('SMSG'+data.substr(4)+' Just Joined the Session.\n');
             });
           }
         });
