@@ -127,7 +127,6 @@ TCPserver.on('connection', function(sock) {
       case "U-VN":
       case "U-VP":
       case "U-VL":
-      case "U-VC":
         //console.log(data)
         //players.forEach(function(player, index, array) {
         //if (player.remoteAddress != sock.remoteAddress) {
@@ -141,6 +140,11 @@ TCPserver.on('connection', function(sock) {
         });
         //}
         //});
+        break;
+      case "U-VC":
+        sockets.forEach(function(socket, index, array) { // Send update to all clients
+          socket.write(data+'\n');
+        });
         break;
       case "U-NV":
         console.log(message)
