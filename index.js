@@ -1,17 +1,20 @@
 // Server Settings!
 var map = "";
 let _VERSION = "0.0.2"
+let UDPExpireTime = 30// In Seconds
 
 const net = require('net');
 const uuidv4 = require('uuid/v4');
 const args = require('minimist')(process.argv.slice(2));
 const chalk = require("chalk")
+
 //console.log(args.port)
 if (args.port) {
   var tcpport = args.port;
 } else {
   var tcpport = 30813;
 }
+
 var udpport = tcpport + 1;
 var wsport = tcpport + 2;
 const host = '192.168.1.195';
@@ -130,6 +133,7 @@ TCPserver.on('connection', function(sock) {
       case "U-VN":
       case "U-VP":
       case "U-VL":
+      case "U-VR":
         //console.log(data)
         //players.forEach(function(player, index, array) {
         //if (player.remoteAddress != sock.remoteAddress) {
@@ -223,11 +227,35 @@ TCPserver.on('error', (err) => {
 //              UDP Server
 //==========================================================
 
+var clients = {};
+var intervalTime = UDPExpireTime*2*1000;
+
+setInterval(function() {
+  console.log(clients);
+  for (var client in clients) {
+    client = JSON.parse(client);
+    var address = client[0];
+    var port = client[1];
+    var lastupdate = client[2];
+    var millis = Date.now() - start;
+    var t = Math.floor(millis/1000)
+    if (t > UDPExpireTime) {
+      client = null
+    }
+  }
+}, intervalTime);
+
 var dgram = require('dgram');
 var UDPserver = dgram.createSocket('udp4');
 
 function UDPsend(message, info) {
-  UDPserver.send(message,info.port,info.address,function(error){if(error){console.log("ERROR");console.log(error);client.close();};});
+  UDPserver.send(message, 0, message.length, info.port, info.address, function(error){
+    if (error) {
+      console.log("ERROR");
+      console.log(error);
+      client.close();
+    };
+  });
 }
 
 UDPserver.on('listening', function() {
@@ -235,20 +263,55 @@ UDPserver.on('listening', function() {
   console.log(chalk.rgb(123, 45, 67)('[UDP]')+' Server listening on ' + address.address + ':' + address.port);
 });
 
-var UDPMembers = [];
-
-UDPserver.on('message',function(msg,info){
+UDPserver.on('message',function(msg,rinfo){
+  console.log(msg);
+  clients[JSON.stringify([rinfo.address, rinfo.port, Date.now()])] = true;
   //sending msg
   var str = msg.toString();
   data = str.trim(); //replace(/\r?\n|\r/g, "");
   var code = data.substring(0, 4);
   switch (code) {
     case "PING":
-    UDPsend("PONG", info)
-    break;
+      UDPsend("PONG", rinfo)
+      break;
+    case "U-VC":
+      for (var client in clients) {
+        client = JSON.parse(client);
+        var port = client[1];
+        var address = client[0];
+        UDPserver.send(message, 0, message.length, port, address, function(error){
+          if (error) {
+            console.log("ERROR");
+            console.log(error);
+            client.close();
+          };
+        });
+      }
+      break;
+    case "U-VR":
+    case "U-VL":
+    case "U-VP":
+    case "U-VN":
+    case "U-VE":
+    case "U-VI":
+      for (var client in clients) {
+        client = JSON.parse(client);
+        var port = client[1];
+        var address = client[0];
+        if (port != rinfo.port && address != rinfo.address) {
+          UDPserver.send(message, 0, message.length, port, address, function(error){
+            if (error) {
+              console.log("ERROR");
+              console.log(error);
+              client.close();
+            };
+          });
+        }
+      }
+      break;
     default:
     console.log(chalk.rgb(123, 45, 67)('[UDP]')+' Data received from client : ' + msg.toString());
-    console.log(chalk.rgb(123, 45, 67)('[UDP]')+' Received %d bytes from %s:%d\n',msg.length, info.address, info.port);
+    console.log(chalk.rgb(123, 45, 67)('[UDP]')+' Received %d bytes from %s:%d\n',msg.length, rinfo.address, rinfo.port);
   }
 });
 
