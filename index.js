@@ -17,7 +17,7 @@ if (args.port) {
 
 var udpport = tcpport + 1;
 var wsport = tcpport + 2;
-const host = '192.168.1.195';
+const host = '0.0.0.0';
 
 //==========================================================
 //              WebSocket Server
@@ -324,4 +324,4 @@ UDPserver.on('message',function(msg,rinfo){
   }
 });
 
-UDPserver.bind(udpport);
+UDPserver.bind(Number(udpport));
