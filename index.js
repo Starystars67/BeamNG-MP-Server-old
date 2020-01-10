@@ -238,7 +238,7 @@ setInterval(function() {
     var t = Math.floor(millis/1000)
     if (t > UDPExpireTime) {
       console.warn("Found Old Client: "+client)
-      clients[client] = null
+      delete clients[client];
     }
   }
 }, intervalTime);
@@ -273,7 +273,9 @@ UDPserver.on('listening', function() {
 });
 
 UDPserver.on('message',function(msg,rinfo){
-  console.log(msg.toString());
+  if (msg.toString() != "PING") {
+    console.log(msg.toString());
+  }
   clients[JSON.stringify([rinfo.address, rinfo.port])] = Date.now();
   //sending msg
   var str = msg.toString();
