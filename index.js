@@ -1,6 +1,6 @@
 // Server Settings!
 var map = "";
-let _VERSION = "0.0.2"
+let _VERSION = "0.0.3"
 let UDPExpireTime = 30// In Seconds
 
 const net = require('net');
