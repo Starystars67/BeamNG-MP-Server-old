@@ -273,14 +273,14 @@ UDPserver.on('listening', function() {
 });
 
 UDPserver.on('message',function(msg,rinfo){
-  if (msg.toString() != "PING") {
-    console.log(msg.toString());
-  }
   clients[JSON.stringify([rinfo.address, rinfo.port])] = Date.now();
   //sending msg
   var str = msg.toString();
   data = str.trim(); //replace(/\r?\n|\r/g, "");
   var code = data.substring(0, 4);
+  if (code != "PING") {
+    console.log(msg.toString());
+  }
   switch (code) {
     case "PING":
       UDPsend("PONG", rinfo)
@@ -321,8 +321,21 @@ UDPserver.on('message',function(msg,rinfo){
       }
       break;
     default:
-      console.log(chalk.rgb(123, 45, 67)('[UDP]')+' Data received from client : ' + msg.toString());
-      console.log(chalk.rgb(123, 45, 67)('[UDP]')+' Received %d bytes from %s:%d\n',msg.length, rinfo.address, rinfo.port);
+      // Unhandled data, this at the moment includes the extra packets of vehicles so it needs to be here until it is handled correctly
+      for (var client in clients) {
+        client = JSON.parse(client);
+        var port = client[1];
+        var address = client[0];
+        UDPserver.send(msg, 0, msg.length, port, address, function(error){
+          if (error) {
+            console.log("ERROR");
+            console.log(error);
+            client.close();
+          };
+        });
+      }
+      //console.log(chalk.rgb(123, 45, 67)('[UDP]')+' Data received from client : ' + msg.toString());
+      //console.log(chalk.rgb(123, 45, 67)('[UDP]')+' Received %d bytes from %s:%d\n',msg.length, rinfo.address, rinfo.port);
   }
 });
 
