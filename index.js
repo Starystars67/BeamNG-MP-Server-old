@@ -65,11 +65,7 @@ TCPserver.on('connection', function(sock) {
   player.nickname = "New User, Loading...";
   player.id = uuidv4();
   player.currentVehID = 0;
-
   players.push(player);
-  sockets.forEach(function(socket, index, array) { // Send update to all clients
-    socket.write('PLST'+JSON.stringify(players)+'\n');
-  });
 
   sock.write('HOLA'+player.id+'\n');
   if (map == "") {
@@ -193,6 +189,8 @@ TCPserver.on('connection', function(sock) {
     })
     if (index !== -1) sockets.splice(index, 1);
     console.log('CLOSED: ' + sock.remoteAddress + ' ' + sock.remotePort);
+    players = removePlayer(players, sock.remoteAddress);
+    console.log("Player list now holds: "+JSON.stringify(players));
     sockets.forEach(function(socket, index, array) { // Send update to all clients
       socket.write('PLST'+JSON.stringify(players)+'\n');
     });
@@ -222,6 +220,10 @@ TCPserver.on('error', (err) => {
   console.error(err);
   throw err;
 });
+
+function removePlayer(array, ip) {
+  return array.filter(player => player.remoteAddress != ip);
+}
 
 //==========================================================
 //              UDP Server
