@@ -280,9 +280,9 @@ UDPserver.on('message',function(msg,rinfo){
   var str = msg.toString();
   data = str.trim(); //replace(/\r?\n|\r/g, "");
   var code = data.substring(0, 4);
-  if (code != "PING") {
-    console.log(msg.toString());
-  }
+  //if (code != "PING") {
+    //console.log(msg.toString());
+  //}
   switch (code) {
     case "PING":
       UDPsend("PONG", rinfo)
