@@ -1,7 +1,7 @@
 // Server Settings!
-var map = "";
-let _VERSION = "0.0.3"
-let UDPExpireTime = 30// In Seconds
+let map = "";
+let _VERSION = "0.0.3";
+let UDPExpireTime = 30;// In Seconds
 
 const net = require('net');
 const uuidv4 = require('uuid/v4');
@@ -9,14 +9,15 @@ const args = require('minimist')(process.argv.slice(2));
 const chalk = require("chalk")
 
 //console.log(args.port)
+let tcpport;
 if (args.port) {
-  var tcpport = args.port;
+  tcpport = args.port;
 } else {
-  var tcpport = 30813;
+  tcpport = 30813;
 }
 
-var udpport = tcpport + 1;
-var wsport = tcpport + 2;
+let udpport = tcpport + 1;
+let wsport = tcpport + 2;
 const host = '0.0.0.0';
 
 //==========================================================
@@ -52,14 +53,14 @@ TCPserver.listen(tcpport, () => {
 
 let sockets = [];
 let players = [];
-let names = [];
-let vehicles = [];
+//let names = [];
+//let vehicles = [];
 
 TCPserver.on('connection', function(sock) {
   console.log(chalk.green('[TCP]')+' CONNECTED: ' + sock.remoteAddress + ':' + sock.remotePort);
   sockets.push(sock);
 
-  var player = {};
+  let player = {};
   player.remoteAddress = sock.remoteAddress;
   player.remotePort = sock.remotePort;
   player.nickname = "New User, Loading...";
@@ -67,31 +68,28 @@ TCPserver.on('connection', function(sock) {
   player.currentVehID = 0;
 
   players.push(player);
-  sockets.forEach(function(socket, index, array) { // Send update to all clients
-    socket.write('PLST'+JSON.stringify(players)+'\n');
-  });
 
   sock.write('HOLA'+player.id+'\n');
-  if (map == "") {
+  if (map === "") {
     sock.write("MAPS\n");
   } else {
     sock.write("MAPC"+map+'\n')
   }
-  sock.write("VCHK"+_VERSION+'\n')
+  sock.write("VCHK"+_VERSION+'\n');
 
   sock.on('data', function(data) {
     // Write the data back to all the connected, the client will receive it as data from the server
-    var str = data.toString();
+    let str = data.toString();
     data = str.trim(); //replace(/\r?\n|\r/g, "");
-    var code = data.substring(0, 4);
-    var message = data.substr(4);
+    let code = data.substring(0, 4);
+    let message = data.substr(4);
 
-    if (code != "PING") {
+    if (code !== "PING") {
       //console.log(code)
-  	}
-  	//if (data.length > 4) {
-  	  //console.log(data.length)
-  	//}
+    }
+    //if (data.length > 4) {
+    //console.log(data.length)
+    //}
 
     switch (code) {
       case "PING":
@@ -110,7 +108,7 @@ TCPserver.on('connection', function(sock) {
         break;
       case "USER":
         players.forEach(function(player, index, array) {
-          if (player.remoteAddress == sock.remoteAddress && player.remotePort == sock.remotePort) {
+          if (player.remoteAddress === sock.remoteAddress && player.remotePort === sock.remotePort) {
             console.log("Player Found ("+player.id+"), setting nickname("+data.substr(4)+")");
             player.nickname = ""+data.substr(4)+"";
             sockets.forEach(function(socket, index, array) { // Send update to all clients
@@ -124,7 +122,7 @@ TCPserver.on('connection', function(sock) {
       case "2001":
         let index = sockets.findIndex(function(o) {
           return o.remoteAddress === sock.remoteAddress && o.remotePort === sock.remotePort;
-        })
+        });
         if (index !== -1) sockets.splice(index, 1);
         console.log('CLOSED: ' + sock.remoteAddress + ' ' + sock.remotePort);
         break;
@@ -141,7 +139,7 @@ TCPserver.on('connection', function(sock) {
         //console.log("Got Update to send!")
         sockets.forEach(function(socket, index, array) { // Send update to all clients
           //console.log(socket.remotePort+' != '+sock.remotePort+' Is not the same so we should send?')
-          if ((sock.remoteAddress != socket.remoteAddress && sock.remotePort != socket.remotePort) || (sock.remoteAddress == socket.remoteAddress && sock.remotePort != socket.remotePort)) {
+          if ((sock.remoteAddress !== socket.remoteAddress && sock.remotePort !== socket.remotePort) || (sock.remoteAddress === socket.remoteAddress && sock.remotePort !== socket.remotePort)) {
             socket.write(data+'\n');
           }
         });
@@ -154,14 +152,14 @@ TCPserver.on('connection', function(sock) {
         });
         break;
       case "U-NV":
-        console.log(message)
+        console.log(message);
         var vid = uuidv4();
 
         break;
       case "C-VS": // Client has changed vehicle. lets update our records.
-        console.log(message)
+        console.log(message);
         players.forEach(function(player, index, array) {
-          if (player.currentVehID != message && player.remoteAddress == sock.remoteAddress && player.remotePort == sock.remotePort) {
+          if (player.currentVehID !== message && player.remoteAddress === sock.remoteAddress && player.remotePort === sock.remotePort) {
             console.log(chalk.green('[TCP]')+" Player Found ("+player.id+"), updating current vehile("+message+")");
             player.currentVehID = message;
           }
@@ -172,7 +170,7 @@ TCPserver.on('connection', function(sock) {
         console.log(chalk.green('[TCP]')+' Data -> ' + data);
         sockets.forEach(function(socket, index, array) { // Send update to all clients
           //if ((sock.remoteAddress != socket.remoteAddress && sock.remotePort != socket.remotePort) || (sock.remoteAddress == socket.remoteAddress && sock.remotePort != socket.remotePort)) {
-            socket.write(data+'\n');
+          socket.write(data+'\n');
           //}
         });
         break;
@@ -184,15 +182,16 @@ TCPserver.on('connection', function(sock) {
 
   // Add a 'close' event handler to this instance of socket
   sock.on('close', function(data) {
-    var index = players.findIndex(function(o) {
+    let index = players.findIndex(function(o) {
       return o.remoteAddress === sock.remoteAddress && o.remotePort === sock.remotePort;
-    })
+    });
     if (index !== -1) sockets.splice(index, 1);
-     index = sockets.findIndex(function(o) {
+    index = sockets.findIndex(function(o) {
       return o.remoteAddress === sock.remoteAddress && o.remotePort === sock.remotePort;
-    })
+    });
     if (index !== -1) sockets.splice(index, 1);
     console.log('CLOSED: ' + sock.remoteAddress + ' ' + sock.remotePort);
+    players = removeFromArray(players, sock);
     sockets.forEach(function(socket, index, array) { // Send update to all clients
       socket.write('PLST'+JSON.stringify(players)+'\n');
     });
@@ -200,10 +199,10 @@ TCPserver.on('connection', function(sock) {
 
   sock.on('error', (err) => {
     // handle errors here
-    if (err.code == "ECONNRESET") {
+    if (err.code === "ECONNRESET") {
       console.error(chalk.red("ERROR ")+"Connection Reset for player: ");
       players.forEach(function(player, index, array) {
-        if (player.remoteAddress == sock.remoteAddress && player.remotePort == sock.remotePort) {
+        if (player.remoteAddress === sock.remoteAddress && player.remotePort === sock.remotePort) {
           console.error(+player.nickname+" ("+player.id+")");
           console.error(chalk.red("ERROR ")+"End Error.");
         }
@@ -222,6 +221,10 @@ TCPserver.on('error', (err) => {
   console.error(err);
   throw err;
 });
+
+function removeFromArray(players, sock) {
+  return players.filter((player => player.remoteAddress !== sock.remoteAddress && player.remotePort !== sock.remotePort));
+}
 
 //==========================================================
 //              UDP Server
