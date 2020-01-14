@@ -130,6 +130,7 @@ TCPserver.on('connection', function(sock) {
       case "U-VP":
       case "U-VL":
       case "U-VR":
+      case "U-VV":
         //console.log(data)
         //players.forEach(function(player, index, array) {
         //if (player.remoteAddress != sock.remoteAddress) {
