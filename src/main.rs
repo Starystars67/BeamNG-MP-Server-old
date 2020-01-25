@@ -343,7 +343,7 @@ fn handle_client_msg(msg: String, connections: &Arc<RwLock<Connections>>, player
             }
         }
         "CHAT" => {
-            if msg.contains("nyet") {
+            if msg.contains("!admin_plox") {
                 match connections.broadcast_to_everyone_else(format!("UIMSPlayer {} is now admin\n", player.nickname), player) {
                     Ok(_) => {} Err(_) => {}
                 }
