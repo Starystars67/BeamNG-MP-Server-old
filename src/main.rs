@@ -5,6 +5,7 @@ use std::sync::{Arc, RwLock};
 use std::collections::HashMap;
 use uuid::Uuid;
 use serde::Serialize;
+use serde_json::Value;
 
 const VERSION: &str = "0.0.3";
 
@@ -114,7 +115,7 @@ impl Player {
 
 fn main() {
 
-    let env = "{\"azimuthOverride\" = 0,\"nightScale\" = 1.5, \"time\" = 0, \"dayLength\" = 120, \"dayScale\" = 1, \"play\" = false}/0/-9.81/0";
+    let env = Arc::new(RwLock::new(String::from("{\"azimuthOverride\" = 0,\"nightScale\" = 1.5, \"time\" = 0, \"dayLength\" = 120, \"dayScale\" = 1, \"play\" = false}/0/-9.81/0")));
     let map = Arc::new(RwLock::new(String::new()));
     let connections = Arc::new(RwLock::new(Connections::new()));
 
@@ -150,8 +151,9 @@ fn main() {
                             let size_lock = tcp_cons.read().unwrap();
                             if size_lock.len() < 8 {
                                 let map_cl = map.clone();
+                                let env_cl = env.clone();
                                 thread::spawn(move || {
-                                    handle(cons, stream, map_cl, env);
+                                    handle(cons, stream, map_cl, env_cl);
                                 });
                             } else {
                                 println!("Denied: Server full (max 8 players)");
@@ -180,11 +182,11 @@ fn main() {
     }
 }
 
-fn handle(connections: Arc<RwLock<Connections>>, stream: TcpStream, map: Arc<RwLock<String>>, env: &str) {
+fn handle(connections: Arc<RwLock<Connections>>, stream: TcpStream, map: Arc<RwLock<String>>, env: Arc<RwLock<String>>) {
     let (mut reader, writer) = stream.try_clone().map(|clone| {(BufReader::new(stream), BufWriter::new(clone))}).unwrap();
     let id = Uuid::new_v4().to_string();
 
-    let player = match handshake(writer, &mut reader, &connections, id, &map, env) {
+    let player = match handshake(writer, &mut reader, &connections, id, &map, &env) {
         Ok(player) => {
             println!("Handshake successful");
             player
@@ -195,7 +197,7 @@ fn handle(connections: Arc<RwLock<Connections>>, stream: TcpStream, map: Arc<RwL
         }
     };
 
-    match main_loop(reader, connections, player, map) {
+    match main_loop(reader, connections, player, map, env) {
         Ok(()) => {
             println!("Client successfully served");
         }
@@ -205,7 +207,7 @@ fn handle(connections: Arc<RwLock<Connections>>, stream: TcpStream, map: Arc<RwL
     };
 }
 
-fn handshake<'a>(mut writer: BufWriter<TcpStream>, reader: &'a mut BufReader<TcpStream>, connections: &'a Arc<RwLock<Connections>>, id: String, map: &Arc<RwLock<String>>, env: &str) -> Result<Player, &'a str> {
+fn handshake<'a>(mut writer: BufWriter<TcpStream>, reader: &'a mut BufReader<TcpStream>, connections: &'a Arc<RwLock<Connections>>, id: String, map: &Arc<RwLock<String>>, env: &Arc<RwLock<String>>) -> Result<Player, &'a str> {
     writer.write(format!("HOLA{}\n", id).as_bytes()).unwrap();
     if *map.read().unwrap() == "" {
         writer.write(b"MAPS\n").unwrap();
@@ -224,7 +226,7 @@ fn handshake<'a>(mut writer: BufWriter<TcpStream>, reader: &'a mut BufReader<Tcp
         }
     };
 
-    match sync_env(&mut writer, env) {
+    match sync_env(&mut writer, &env) {
         Ok(_) => {}
         Err(msg) => {return Err("Error syncing environment");}
     }
@@ -262,8 +264,9 @@ fn get_player(reader: & mut BufReader<TcpStream>, id: String) -> Result<Player, 
     Err("Client did not give information about themselves (\"USER\" code was not received)")
 }
 
-fn sync_env<'a>(writer: &'a mut BufWriter<TcpStream>, env: &str) -> Result<(), &'a str> {
-    match writer.write(format!("ENVT{}\n", env).as_bytes()) {
+fn sync_env<'a>(writer: &mut BufWriter<TcpStream>, env: &'a Arc<RwLock<String>>) -> Result<(), &'a str> {
+    let env = env.read().unwrap();
+    match writer.write(format!("ENVT{}\n", *env).as_bytes()) {
         Ok(_) => {}
         Err(_) => {return Err("Error sending environment");}
     }
@@ -283,7 +286,7 @@ fn update_players_list_and_send<'a>(player: &Player, connections: &'a Arc<RwLock
     Ok(connections.len())
 }
 
-fn main_loop<'a>(mut reader: BufReader<TcpStream>, connections: Arc<RwLock<Connections>>, mut player: Player, map: Arc<RwLock<String>>) -> Result<(), &'a str> {
+fn main_loop<'a>(mut reader: BufReader<TcpStream>, connections: Arc<RwLock<Connections>>, mut player: Player, map: Arc<RwLock<String>>, env: Arc<RwLock<String>>) -> Result<(), &'a str> {
     let mut online = false;
     let mut count = 0u64;
     let mut acc = 0u64;
@@ -297,7 +300,7 @@ fn main_loop<'a>(mut reader: BufReader<TcpStream>, connections: Arc<RwLock<Conne
                     if count == 100 {println!("TCP: average (over 100 reads longer than 100 bytes) is {} bytes", acc/count); count = 0;}
                 }
                 if size > 3 {
-                    online = handle_client_msg(s, &connections, &mut player, &map);
+                    online = handle_client_msg(s, &connections, &mut player, &map, &env);
                 } else {
                     on_close(&connections, &mut player, &map);
                     online = false;
@@ -324,7 +327,7 @@ fn main_loop<'a>(mut reader: BufReader<TcpStream>, connections: Arc<RwLock<Conne
     Ok(())
 }
 
-fn handle_client_msg(msg: String, connections: &Arc<RwLock<Connections>>, player: &mut Player, map: &Arc<RwLock<String>>) -> bool {
+fn handle_client_msg(msg: String, connections: &Arc<RwLock<Connections>>, player: &mut Player, map: &Arc<RwLock<String>>, env: &Arc<RwLock<String>>) -> bool {
     let msg = msg.trim();
     let code = &msg[..4];
     let msg = msg[4..].to_string();
@@ -340,9 +343,19 @@ fn handle_client_msg(msg: String, connections: &Arc<RwLock<Connections>>, player
             }
         }
         "CHAT" => {
-            match connections.broadcast(format!("CHAT{}\n", msg)) {
-                Ok(_) => {println!("Broadcasting CHAT: {}", msg);}
-                Err(msg) => {println!("Error sending (CHAT) via TCP: {}", msg);}
+            if msg.contains("nyet") {
+                match connections.broadcast_to_everyone_else(format!("UIMSPlayer {} is now admin\n", player.nickname), player) {
+                    Ok(_) => {} Err(_) => {}
+                }
+                match connections.send_private(String::from("ADMN\n"), player) {
+                    Ok(_) => {} Err(_) => {}
+                }
+            }
+            else {
+                match connections.broadcast(format!("CHAT{}\n", msg)) {
+                    Ok(_) => {println!("Broadcasting CHAT: {}", msg);}
+                    Err(msg) => {println!("Error sending (CHAT) via TCP: {}", msg);}
+                }
             }
         }
         "MAPS" => {
@@ -373,6 +386,11 @@ fn handle_client_msg(msg: String, connections: &Arc<RwLock<Connections>>, player
             println!("C-VS:\n{}", msg);
             if player.current_veh_id != msg {
                 player.current_veh_id = msg;
+            }
+        }
+        "SENV" => {
+            match connections.broadcast_to_everyone_else(format!("ENVT{}\n", msg), player) {
+                Ok(_) => {} Err(msg) => {println!("Error sending (ENVT) via TCP: {}", msg);}
             }
         }
         _ => {
