@@ -7,7 +7,7 @@ use uuid::Uuid;
 use serde::Serialize;
 use serde_json::Value;
 
-const VERSION: &str = "0.0.3";
+const VERSION: &str = "0.0.4";
 
 struct Connections {
     map: HashMap<Player, BufWriter<TcpStream>>
