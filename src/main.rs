@@ -114,7 +114,7 @@ impl Player {
 
 fn main() {
 
-    let env = Arc::new(RwLock::new(String::from("{\"azimuthOverride\" = 0,\"nightScale\" = 1.5, \"time\" = 0, \"dayLength\" = 120, \"dayScale\" = 1, \"play\" = false}/0/-9.81/0")));
+    let env = Arc::new(RwLock::new(String::from("{\"nightScale\": 1.5, \"time\": 0.1, \"dayLength\": 120, \"dayScale\": 1, \"play\": false, \"fogDensity\": 0.0006, \"windSpeed\": 0.14, \"gravity\":-9.81}")));
     let map = Arc::new(RwLock::new(String::new()));
     let connections = Arc::new(RwLock::new(Connections::new()));
 
