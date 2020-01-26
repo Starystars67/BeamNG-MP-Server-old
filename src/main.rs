@@ -1,10 +1,13 @@
 use std::net::{TcpListener, TcpStream, UdpSocket, SocketAddr};
 use std::thread;
-use std::io::{Write, BufReader, BufRead, BufWriter};
+use std::io::{Write, BufReader, BufRead, BufWriter, Read};
 use std::sync::{Arc, RwLock};
 use std::collections::HashMap;
 use uuid::Uuid;
 use serde::Serialize;
+use std::fs::File;
+use std::path::Path;
+use serde_json::Value;
 
 const VERSION: &str = "0.0.4";
 
@@ -31,7 +34,7 @@ impl Connections {
     pub fn broadcast(&mut self, msg: String) -> Result<(), &str> {
         for socket in &mut self.map {
             socket.1.write(msg.as_bytes()).expect("Error broadcasting");
-            socket.1.flush().unwrap();
+            socket.1.flush().expect("Error broadcasting");
         }
         Ok(())
     }
@@ -40,7 +43,7 @@ impl Connections {
         for socket in &mut self.map {
             if !Player::eq(socket.0, except) {
                 socket.1.write(msg.as_bytes()).expect("Error broadcasting");
-                socket.1.flush().unwrap();
+                socket.1.flush().expect("Error broadcasting");
             }
         }
         Ok(())
@@ -49,7 +52,7 @@ impl Connections {
     pub fn send_private(&mut self, msg: String, to: &Player) -> Result<(), &str> {
         let stream = &mut self.map.get_mut(to).expect("No such player found in player list");
         stream.write(msg.as_bytes()).expect("Error writing to stream");
-        stream.flush().unwrap();
+        stream.flush().expect("Error writing to stream");
         Ok(())
     }
 
@@ -72,7 +75,7 @@ impl Connections {
     pub fn get_addresses(&self) -> Vec<SocketAddr> {
         let mut res: Vec<SocketAddr> = vec![];
         for player in &self.map {
-            res.push(player.1.get_ref().local_addr().unwrap());
+            res.push(player.1.get_ref().local_addr().expect("Error reading socket address (why?)"));
         }
         res
     }
@@ -114,32 +117,16 @@ impl Player {
 
 fn main() {
 
-    let env = Arc::new(RwLock::new(String::from("{\"nightScale\": 1.5, \"time\": 0.1, \"dayLength\": 120, \"dayScale\": 1, \"play\": false, \"fogDensity\": 0.0006, \"windSpeed\": 0.14, \"gravity\":-9.81}")));
-    let map = Arc::new(RwLock::new(String::new()));
-    let connections = Arc::new(RwLock::new(Connections::new()));
-
-    print!("Enter port number to open TCP on (leave empty for 30813): ");
-    std::io::stdout().flush().unwrap();
-    let tcp_port = {
-        let mut tcp_port = String::new();
-        if std::io::stdin().read_line(&mut tcp_port).unwrap()<=2 {
-            30813u16
-        } else {
-            match tcp_port.trim().parse::<u16>() {
-                Ok(val) => {
-                    val
-                }
-                Err(_) => {
-                    println!("Could not convert to u16, setting to 30813");
-                    30813u16
-                }
-            }
-        }
+    let (env, map, tcp_port, udp_port) = match read_server_config(){
+        Ok(tuple) => { (tuple.0, tuple.1, tuple.2, tuple.3) }
+        Err(msg) => { println!("{}", msg); return; }
     };
+
+    let connections = Arc::new(RwLock::new(Connections::new()));
 
     match TcpListener::bind(format!("0.0.0.0:{}", tcp_port)) {
         Ok(listener) => {
-            println!("\nTCP listening on {}", format!("0.0.0.0:{}", tcp_port));
+            println!("\n\tTCP listening on {}", format!("0.0.0.0:{}", tcp_port));
             let tcp_cons = connections.clone();
             thread::spawn(move || {
                 for stream in listener.incoming() {
@@ -166,19 +153,44 @@ fn main() {
             });
         }
         Err(_) => {
-            //println!("Could not open server on {}:{}", tcp_ip, tcp_port); THIS IS DEBUG
+            println!("\n\n\tCould not bind TCP to {}", tcp_port);
+            return;
         }
     };
 
-    match UdpSocket::bind(format!("0.0.0.0:{}", tcp_port+1)) {
+    match UdpSocket::bind(format!("0.0.0.0:{}", udp_port)) {
         Ok(udp) => {
-            println!("UDP listening on {}", format!("0.0.0.0:{}", tcp_port+1));
-            udp_loop(udp, connections.clone());
+            println!("\tUDP listening on {}", format!("0.0.0.0:{}", udp_port));
+            udp_loop(udp, connections);
         }
         Err(_) => {
-            println!("Could not bind UDP to {}", tcp_port+1);
+            println!("\tCould not bind UDP to {}", udp_port);
         }
-    }
+    };
+}
+
+fn read_server_config<'a>() -> Result<(Arc<RwLock<String>>, Arc<RwLock<String>>, u16, u16), &'a str> {
+    let mut cfg = match File::open(Path::new("cfg/server.json")) {
+        Ok(file) => { file } Err(_) => {return Err("cfg/server.json was not found. Aborting");}
+    };
+    let mut s = String::new();
+    cfg.read_to_string(&mut s).unwrap();
+    let json = match serde_json::from_str::<Value>(s.as_str()) {
+        Ok(value) => { value } Err(_) => {return Err("Error parsing server.json");}
+    };
+    let env = json["env"].to_string();
+    let map = {
+        let map = json["map"].to_string();
+        if map == "null" {String::from("")}
+        else {map}
+    };
+    let tcp_port = match json["tcp_port"].as_u64(){
+        Some(port) if port < 65535 => { port as u16 } _ => { return Err("TCP port not defined or is greater than 65535"); }
+    };
+    let udp_port = match json["udp_port"].as_u64(){
+        Some(port) if port < 65535 => { port as u16 } _ => { return Err("UDP port not defined or is greater than 65535"); }
+    };
+    Ok((Arc::new(RwLock::new(env)), Arc::new(RwLock::new(map)), tcp_port, udp_port))
 }
 
 fn handle(connections: Arc<RwLock<Connections>>, stream: TcpStream, map: Arc<RwLock<String>>, env: Arc<RwLock<String>>) {
@@ -191,7 +203,7 @@ fn handle(connections: Arc<RwLock<Connections>>, stream: TcpStream, map: Arc<RwL
             player
         }
         Err(string) => {
-            println!("An error occurred!\n{}", string);
+            println!("An error occurred!\n{}\nDisconnected client", string);
             return;
         }
     };
@@ -201,20 +213,21 @@ fn handle(connections: Arc<RwLock<Connections>>, stream: TcpStream, map: Arc<RwL
             println!("Client successfully served");
         }
         Err(msg) => {
-            println!("Error occurred after handshake:\n{}", msg);
+            println!("Error occurred after handshake:\n{}\nDisconnected client", msg);
         }
     };
 }
 
 fn handshake<'a>(mut writer: BufWriter<TcpStream>, reader: &'a mut BufReader<TcpStream>, connections: &'a Arc<RwLock<Connections>>, id: String, map: &Arc<RwLock<String>>, env: &Arc<RwLock<String>>) -> Result<Player, &'a str> {
-    writer.write(format!("HOLA{}\n", id).as_bytes()).unwrap();
-    if *map.read().unwrap() == "" {
-        writer.write(b"MAPS\n").unwrap();
+    let map = map.read().unwrap();
+    writer.write(format!("HOLA{}\n", id).as_bytes()).expect("Failed writing during handshake (client disconnected?)");
+    if *map == "" {
+        writer.write(b"MAPS\n").expect("Failed writing during handshake (client disconnected?)");
     } else {
-        writer.write(format!("MAPC{}\n", *map.read().unwrap()).as_bytes()).unwrap();
+        writer.write(format!("MAPC{}\n", *map).as_bytes()).expect("Failed writing during handshake (client disconnected?)");
     }
-    writer.write(format!("VCHK{}\n", VERSION).as_bytes()).unwrap();
-    writer.flush().unwrap();
+    writer.write(format!("VCHK{}\n", VERSION).as_bytes()).expect("Failed writing during handshake (client disconnected?)");
+    writer.flush().expect("Failed writing during handshake (client disconnected?)");
 
     let player = match get_player(reader, id) {
         Ok(player) => {
@@ -248,7 +261,7 @@ fn get_player(reader: & mut BufReader<TcpStream>, id: String) -> Result<Player, 
         match reader.read_line(&mut s) {
             Ok(size) if size > 4 => {
                 if &s[..4]=="USER" {
-                    let addr = reader.get_mut().local_addr().unwrap();
+                    let addr = reader.get_mut().local_addr().expect("Failed to read address (why?)");
                     return Ok(Player::new(addr.ip().to_string(),
                                           addr.port(),
                                           s[4..].trim().to_string(),
@@ -360,6 +373,7 @@ fn handle_client_msg(msg: String, connections: &Arc<RwLock<Connections>>, player
         "MAPS" => {
             let mut map = map.write().unwrap();
             *map = msg;
+            println!("Set map to {}", *map);
             match connections.send_private(format!("MAPC{}\n", *map), player) {
                 Ok(()) => {}
                 Err(msg) => {println!("Error sending (MAPC) via TCP: {}", msg);}
@@ -461,7 +475,7 @@ fn handle_udp_request(string: &str, addr: SocketAddr, udp: &mut UdpSocket, conne
             }
         }
         "U-VI" | "U-VE" | "U-VN" | "U-VP" | "U-VL" | "U-VR" => {
-            let local = udp.local_addr().unwrap();
+            let local = udp.local_addr().expect("Failed to read socket address (why?)");
             let addr = connections.read().unwrap().get_addresses();
             for unit in addr {
                 if unit != local {
