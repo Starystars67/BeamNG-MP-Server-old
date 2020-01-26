@@ -5,7 +5,6 @@ use std::sync::{Arc, RwLock};
 use std::collections::HashMap;
 use uuid::Uuid;
 use serde::Serialize;
-use serde_json::Value;
 
 const VERSION: &str = "0.0.4";
 
@@ -228,7 +227,7 @@ fn handshake<'a>(mut writer: BufWriter<TcpStream>, reader: &'a mut BufReader<Tcp
 
     match sync_env(&mut writer, &env) {
         Ok(_) => {}
-        Err(msg) => {return Err("Error syncing environment");}
+        Err(_) => {return Err("Error syncing environment");}
     }
 
     match update_players_list_and_send(&player, connections, Option::Some(writer), true) {
@@ -344,7 +343,7 @@ fn handle_client_msg(msg: String, connections: &Arc<RwLock<Connections>>, player
         }
         "CHAT" => {
             if msg.contains("!admin_plox") {
-                match connections.broadcast_to_everyone_else(format!("UIMSPlayer {} is now admin\n", player.nickname), player) {
+                match connections.broadcast_to_everyone_else(format!("SMSGPlayer {} is now admin\n", player.nickname), player) {
                     Ok(_) => {} Err(_) => {}
                 }
                 match connections.send_private(String::from("ADMN\n"), player) {
@@ -389,7 +388,9 @@ fn handle_client_msg(msg: String, connections: &Arc<RwLock<Connections>>, player
             }
         }
         "SENV" => {
-            match connections.broadcast_to_everyone_else(format!("ENVT{}\n", msg), player) {
+            let mut env = env.write().unwrap();
+            *env = msg;
+            match connections.broadcast_to_everyone_else(format!("ENVT{}\n", *env), player) {
                 Ok(_) => {} Err(msg) => {println!("Error sending (ENVT) via TCP: {}", msg);}
             }
         }
