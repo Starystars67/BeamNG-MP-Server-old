@@ -374,7 +374,7 @@ fn handle_client_msg(msg: String, connections: &Arc<RwLock<Connections>>, player
         "MAPS" => {
             let mut map = map.write().unwrap();
             *map = msg;
-            println!("Set map to {}", *map);
+            unsafe { if DEBUG {println!("Set map to {}", *map);}}
             match connections.send_private(format!("MAPC{}\n", *map), player) {
                 Ok(()) => {}
                 Err(msg) => unsafe { if DEBUG {{println!("Error sending (MAPC) via TCP: {}", msg);}}}
