@@ -1,0 +1,17 @@
+{
+  "tcp_port": 30813,
+  "udp_port": 30814,
+  "map": null,
+  "max_players": 5,
+  "debug": false,
+  "env": {
+    "nightScale": 1.5,
+    "time": 0.5,
+    "dayLength": 120,
+    "dayScale": 1,
+    "play": true,
+    "fogDensity": 0.0006,
+    "windSpeed": 0.14,
+    "gravity":-9.81
+  }
+}
