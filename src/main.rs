@@ -10,6 +10,7 @@ use std::path::Path;
 use serde_json::Value;
 
 const VERSION: &str = "0.0.4";
+static mut DEBUG: bool = false;
 
 struct Connections {
     map: HashMap<Player, BufWriter<TcpStream>>
@@ -117,10 +118,12 @@ impl Player {
 
 fn main() {
 
-    let (env, map, tcp_port, udp_port) = match read_server_config(){
-        Ok(tuple) => { (tuple.0, tuple.1, tuple.2, tuple.3) }
-        Err(msg) => { println!("{}", msg); return; }
+    let (env, map, max_players, tcp_port, udp_port, debug) = match read_server_config(){
+        Ok(tuple) => { (tuple.0, tuple.1, tuple.2, tuple.3, tuple.4, tuple.5) }
+        Err(msg) => { println!("{}", msg); std::io::stdin().read(&mut [0]).unwrap(); return; }
     };
+
+    if debug { unsafe { DEBUG = true; } }
 
     let connections = Arc::new(RwLock::new(Connections::new()));
 
@@ -132,22 +135,17 @@ fn main() {
                 for stream in listener.incoming() {
                     match stream {
                         Ok(stream) => {
-                            println!("Got connection!");
                             let cons = tcp_cons.clone();
                             let size_lock = tcp_cons.read().unwrap();
-                            if size_lock.len() < 8 {
+                            if size_lock.len() < max_players {
                                 let map_cl = map.clone();
                                 let env_cl = env.clone();
                                 thread::spawn(move || {
                                     handle(cons, stream, map_cl, env_cl);
                                 });
-                            } else {
-                                println!("Denied: Server full (max 8 players)");
                             }
                         }
-                        Err(_) => {
-                            println!("Something went wrong while accepting incoming request!");
-                        }
+                        Err(_) => unsafe { if DEBUG { println!("Something went wrong while accepting incoming request!"); } }
                     }
                 }
             });
@@ -169,9 +167,9 @@ fn main() {
     };
 }
 
-fn read_server_config<'a>() -> Result<(Arc<RwLock<String>>, Arc<RwLock<String>>, u16, u16), &'a str> {
+fn read_server_config<'a>() -> Result<(Arc<RwLock<String>>, Arc<RwLock<String>>, usize, u16, u16, bool), &'a str> {
     let mut cfg = match File::open(Path::new("cfg/server.json")) {
-        Ok(file) => { file } Err(_) => {return Err("cfg/server.json was not found. Aborting");}
+        Ok(file) => { println!("\n\tConfig file found!"); file } Err(_) => {return Err("cfg/server.json was not found. Aborting");}
     };
     let mut s = String::new();
     cfg.read_to_string(&mut s).unwrap();
@@ -184,36 +182,39 @@ fn read_server_config<'a>() -> Result<(Arc<RwLock<String>>, Arc<RwLock<String>>,
         if map == "null" {String::from("")}
         else {map}
     };
+    let max_players = match json["max_players"].as_u64(){
+        Some(players) if players < 11 => { players as usize } _ => { return Err("Max players is not defined or is greater than 10"); }
+    };
     let tcp_port = match json["tcp_port"].as_u64(){
         Some(port) if port < 65535 => { port as u16 } _ => { return Err("TCP port not defined or is greater than 65535"); }
     };
     let udp_port = match json["udp_port"].as_u64(){
         Some(port) if port < 65535 => { port as u16 } _ => { return Err("UDP port not defined or is greater than 65535"); }
     };
-    Ok((Arc::new(RwLock::new(env)), Arc::new(RwLock::new(map)), tcp_port, udp_port))
-}
+    let debug = match json["debug"].as_bool() {
+        Some(debug) => { debug } _ => { false }
+    };
+    Ok((Arc::new(RwLock::new(env)), Arc::new(RwLock::new(map)), max_players, tcp_port, udp_port, debug))
+} // TODO actually make it a struct because it's getting too big
 
 fn handle(connections: Arc<RwLock<Connections>>, stream: TcpStream, map: Arc<RwLock<String>>, env: Arc<RwLock<String>>) {
     let (mut reader, writer) = stream.try_clone().map(|clone| {(BufReader::new(stream), BufWriter::new(clone))}).unwrap();
     let id = Uuid::new_v4().to_string();
 
     let player = match handshake(writer, &mut reader, &connections, id, &map, &env) {
-        Ok(player) => {
-            println!("Handshake successful");
+        Ok(player) => unsafe {
+            if DEBUG { println!("Handshake successful"); }
             player
         }
-        Err(string) => {
-            println!("An error occurred!\n{}\nDisconnected client", string);
-            return;
-        }
+        Err(string) => unsafe { if DEBUG { println!("An error occurred!\n{}\nDisconnected client", string); }return; }
     };
 
     match main_loop(reader, connections, player, map, env) {
-        Ok(()) => {
-            println!("Client successfully served");
+        Ok(()) => unsafe {
+            if DEBUG { println!("Client successfully served"); }
         }
-        Err(msg) => {
-            println!("Error occurred after handshake:\n{}\nDisconnected client", msg);
+        Err(msg) => unsafe {
+            if DEBUG { println!("Error occurred after handshake:\n{}\nDisconnected client", msg); }
         }
     };
 }
@@ -244,13 +245,7 @@ fn handshake<'a>(mut writer: BufWriter<TcpStream>, reader: &'a mut BufReader<Tcp
     }
 
     match update_players_list_and_send(&player, connections, Option::Some(writer), true) {
-        Ok(_) => {
-            Ok(player)
-        }
-        Err(msg) => {
-            println!("{}", msg);
-            Err("Could not update players list for some reason. Msg why is above")
-        }
+        Ok(_) => { Ok(player) } Err(msg) => { Err(msg) }
     }
 }
 
@@ -293,7 +288,7 @@ fn update_players_list_and_send<'a>(player: &Player, connections: &'a Arc<RwLock
     let list = serde_json::to_string(&list).expect("Error parsing json list");
     match connections.broadcast(format!("PLST{}\n", list)) {
         Ok(_) => {}
-        Err(msg) => {println!("{}", msg); return Err("Error sending PLST");}
+        Err(_) => { return Err("Error broadcasting") }
     };
     Ok(connections.len())
 }
@@ -306,10 +301,16 @@ fn main_loop<'a>(mut reader: BufReader<TcpStream>, connections: Arc<RwLock<Conne
         let mut s = String::new();
         let check = match reader.read_line(&mut s) {
             Ok(size) => {
-                if size > 100 {
-                    count += 1;
-                    acc += size as u64;
-                    if count == 100 {println!("TCP: average (over 100 reads longer than 100 bytes) is {} bytes", acc/count); count = 0;}
+                unsafe {
+                    if DEBUG && size > 100 {
+                        count += 1;
+                        acc += size as u64;
+                        if count == 100 {
+                            println!("TCP: average (over 100 reads longer than 100 bytes) is {} bytes", acc / count);
+                            count = 0;
+                            acc = 0
+                        }
+                    }
                 }
                 if size > 3 {
                     online = handle_client_msg(s, &connections, &mut player, &map, &env);
@@ -351,7 +352,7 @@ fn handle_client_msg(msg: String, connections: &Arc<RwLock<Connections>>, player
         "PING" => {
             match connections.send_private(String::from("PONG\n"), player) {
                 Ok(()) => {}
-                Err(msg) => { println!("Error sending (PONG) via TCP: {}", msg); }
+                Err(msg) => unsafe { if DEBUG {println!("Error sending (PONG) via TCP: {}", msg); }}
             }
         }
         "CHAT" => {
@@ -365,8 +366,8 @@ fn handle_client_msg(msg: String, connections: &Arc<RwLock<Connections>>, player
             }
             else {
                 match connections.broadcast(format!("CHAT{}\n", msg)) {
-                    Ok(_) => {println!("Broadcasting CHAT: {}", msg);}
-                    Err(msg) => {println!("Error sending (CHAT) via TCP: {}", msg);}
+                    Ok(_) => unsafe { if DEBUG {{println!("Broadcasting CHAT: {}", msg);}}}
+                    Err(msg) => unsafe { if DEBUG {println!("Error sending (CHAT) via TCP: {}", msg);}}
                 }
             }
         }
@@ -376,19 +377,19 @@ fn handle_client_msg(msg: String, connections: &Arc<RwLock<Connections>>, player
             println!("Set map to {}", *map);
             match connections.send_private(format!("MAPC{}\n", *map), player) {
                 Ok(()) => {}
-                Err(msg) => {println!("Error sending (MAPC) via TCP: {}", msg);}
+                Err(msg) => unsafe { if DEBUG {{println!("Error sending (MAPC) via TCP: {}", msg);}}}
             }
         }
         "U-VI" | "U-VE" | "U-VN" | "U-VP" | "U-VL" | "U-VR" => {
             match connections.broadcast_to_everyone_else(format!("{}\n", msg), player) {
                 Ok(_) => {}
-                Err(msg) => {println!("Error sending (U-V[I/E/N/P/L/R]) via TCP: {}", msg);}
+                Err(msg) => unsafe { if DEBUG {{println!("Error sending (U-V[I/E/N/P/L/R]) via TCP: {}", msg);}}}
             }
         }
         "U-VC" => {
             match connections.broadcast(format!("{}\n", msg)) {
                 Ok(_) => {}
-                Err(msg) => {println!("Error sending (U-VC) via TCP: {}", msg);}
+                Err(msg) => unsafe { if DEBUG {{println!("Error sending (U-VC) via TCP: {}", msg);}}}
             }
         }
         "U-NV" => {
@@ -405,15 +406,15 @@ fn handle_client_msg(msg: String, connections: &Arc<RwLock<Connections>>, player
             let mut env = env.write().unwrap();
             *env = msg;
             match connections.broadcast_to_everyone_else(format!("ENVT{}\n", *env), player) {
-                Ok(_) => {} Err(msg) => {println!("Error sending (ENVT) via TCP: {}", msg);}
+                Ok(_) => {} Err(msg) => unsafe { if DEBUG {{println!("Error sending (ENVT) via TCP: {}", msg);}}}
             }
         }
         _ => {
-            println!("Unknown request from {}:{} (nickname: {}):\n{}", player.remote_address,
+            unsafe { if DEBUG {println!("Unknown request from {}:{} (nickname: {}):\n{}", player.remote_address,
                                                         player.remote_port,
                                                         player.nickname,
                                                         msg);
-        }
+        }}}
     }
     true
 }
@@ -427,9 +428,7 @@ fn on_close(connections: &Arc<RwLock<Connections>>, player: &mut Player, map: &A
                 *map = String::from("");
             }
         }
-        Err(msg) => {
-            println!("Error closing: {}", msg);
-        }
+        Err(msg) => unsafe { if DEBUG {{ println!("Error closing: {}", msg);}}}
     }
 }
 
@@ -444,22 +443,27 @@ fn udp_loop(mut udp: UdpSocket, connections: Arc<RwLock<Connections>>) {
                     Ok(string) => {
                         string
                     }
-                    Err(_) => {
+                    Err(_) => unsafe { if DEBUG {{
                         println!("Non-UTF-8 was received.");
-                        continue;
-                    }
+                    }}continue;}
                 };
-                if tuple.0 > 100 {
-                    count += 1;
-                    acc += tuple.0 as u64;
-                    if count == 100 {println!("UDP: average (over 100 reads longer than 100 bytes) is {} bytes", acc/count); count = 0;}
-                    println!("UDP: {} bytes", tuple.0);
+                unsafe {
+                    if DEBUG && tuple.0 > 100 {
+                        count += 1;
+                        acc += tuple.0 as u64;
+                        if count == 100 {
+                            println!("UDP: average (over 100 reads longer than 100 bytes) is {} bytes", acc / count);
+                            count = 0;
+                            acc = 0;
+                        }
+                        println!("UDP: {} bytes", tuple.0);
+                    }
                 }
                 handle_udp_request(s, tuple.1, &mut udp, &connections);
             }
-            _ => {
+            _ => unsafe { if DEBUG {{
                 println!("Error receiving from UDP");
-            }
+            }}}
         };
     }
 }
@@ -471,7 +475,7 @@ fn handle_udp_request(string: &str, addr: SocketAddr, udp: &mut UdpSocket, conne
         "PING" => {
             match udp.send_to(b"PONG\n", addr) {
                 Ok(_) => {}
-                Err(_) => { println!("Error sending (PONG) via UDP"); }
+                Err(_) =>  unsafe { if DEBUG {{ println!("Error sending (PONG) via UDP"); }}}
             }
         }
         "U-VI" | "U-VE" | "U-VN" | "U-VP" | "U-VL" | "U-VR" => {
@@ -481,7 +485,7 @@ fn handle_udp_request(string: &str, addr: SocketAddr, udp: &mut UdpSocket, conne
                 if unit != local {
                     match udp.send_to(msg.as_bytes(), unit) {
                         Ok(_) => {}
-                        Err(_) => { println!("Error sending (U-V[I/E/N/P/L/R]) via UDP"); }
+                        Err(_) =>  unsafe { if DEBUG {{ println!("Error sending (U-V[I/E/N/P/L/R]) via UDP"); }}}
                     }
                 }
             }
@@ -491,7 +495,7 @@ fn handle_udp_request(string: &str, addr: SocketAddr, udp: &mut UdpSocket, conne
             for unit in addr {
                 match udp.send_to(msg.as_bytes(), unit) {
                     Ok(_) => {}
-                    Err(_) => { println!("Error sending (U-VC or unhandled) via UDP"); }
+                    Err(_) =>  unsafe { if DEBUG {{ println!("Error sending (U-VC or unhandled) via UDP"); }}}
                 }
             }
         }
