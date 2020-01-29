@@ -207,6 +207,20 @@ TCPserver.on('connection', function(sock) {
           console.error(chalk.red("ERROR ")+"End Error.");
         }
       });
+      var index = players.findIndex(function(o) {
+        return o.remoteAddress === sock.remoteAddress && o.remotePort === sock.remotePort;
+      })
+      if (index !== -1) sockets.splice(index, 1);
+       index = sockets.findIndex(function(o) {
+        return o.remoteAddress === sock.remoteAddress && o.remotePort === sock.remotePort;
+      })
+      if (index !== -1) sockets.splice(index, 1);
+      console.log('CLOSED: ' + sock.remoteAddress + ' ' + sock.remotePort);
+      players = removePlayer(players, sock.remoteAddress);
+      console.log("Player list now holds: "+JSON.stringify(players));
+      sockets.forEach(function(socket, index, array) { // Send update to all clients
+        socket.write('PLST'+JSON.stringify(players)+'\n');
+      });
     } else {
       console.error("Sock Error");
       console.error(err);
