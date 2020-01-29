@@ -199,7 +199,7 @@ TCPserver.on('connection', function(sock) {
 
   sock.on('error', (err) => {
     // handle errors here
-    if (err.code == "ECONNRESET") {
+    if (err.code == "ECONNRESET" || err.code == "ETIMEOUT") {
       console.error(chalk.red("ERROR ")+"Connection Reset for player: ");
       players.forEach(function(player, index, array) {
         if (player.remoteAddress == sock.remoteAddress && player.remotePort == sock.remotePort) {
