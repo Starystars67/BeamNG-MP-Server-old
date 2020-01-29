@@ -65,11 +65,7 @@ TCPserver.on('connection', function(sock) {
   player.nickname = "New User, Loading...";
   player.id = uuidv4();
   player.currentVehID = 0;
-
   players.push(player);
-  sockets.forEach(function(socket, index, array) { // Send update to all clients
-    socket.write('PLST'+JSON.stringify(players)+'\n');
-  });
 
   sock.write('HOLA'+player.id+'\n');
   if (map == "") {
@@ -134,6 +130,7 @@ TCPserver.on('connection', function(sock) {
       case "U-VP":
       case "U-VL":
       case "U-VR":
+      case "U-VV":
         //console.log(data)
         //players.forEach(function(player, index, array) {
         //if (player.remoteAddress != sock.remoteAddress) {
@@ -193,6 +190,8 @@ TCPserver.on('connection', function(sock) {
     })
     if (index !== -1) sockets.splice(index, 1);
     console.log('CLOSED: ' + sock.remoteAddress + ' ' + sock.remotePort);
+    players = removePlayer(players, sock.remoteAddress);
+    console.log("Player list now holds: "+JSON.stringify(players));
     sockets.forEach(function(socket, index, array) { // Send update to all clients
       socket.write('PLST'+JSON.stringify(players)+'\n');
     });
@@ -200,7 +199,7 @@ TCPserver.on('connection', function(sock) {
 
   sock.on('error', (err) => {
     // handle errors here
-    if (err.code == "ECONNRESET") {
+    if (err.code == "ECONNRESET" || err.code == "ETIMEOUT") {
       console.error(chalk.red("ERROR ")+"Connection Reset for player: ");
       players.forEach(function(player, index, array) {
         if (player.remoteAddress == sock.remoteAddress && player.remotePort == sock.remotePort) {
@@ -222,6 +221,10 @@ TCPserver.on('error', (err) => {
   console.error(err);
   throw err;
 });
+
+function removePlayer(array, ip) {
+  return array.filter(player => player.remoteAddress != ip);
+}
 
 //==========================================================
 //              UDP Server
@@ -278,9 +281,9 @@ UDPserver.on('message',function(msg,rinfo){
   var str = msg.toString();
   data = str.trim(); //replace(/\r?\n|\r/g, "");
   var code = data.substring(0, 4);
-  if (code != "PING") {
-    console.log(msg.toString());
-  }
+  //if (code != "PING") {
+    //console.log(msg.toString());
+  //}
   switch (code) {
     case "PING":
       UDPsend("PONG", rinfo)
