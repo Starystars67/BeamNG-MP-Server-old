@@ -117,7 +117,8 @@ function RunServer() {
       uuid: uid,
       players: Object.keys(players).length,
       port: tcpport,
-      map: map
+      map: map,
+      sname: name
     };
     var options = {
       uri: 'http://s1.yourthought.co.uk:3599/heartbeat',
