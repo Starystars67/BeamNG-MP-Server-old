@@ -86,7 +86,7 @@ setInterval(function() {
     }
     console.log(`[Heartbeat] statusCode: ${res.statusCode}, responce: ${body}`)
   })
-}, 10 * 1000)
+}, 15 * 1000)
 
 //==========================================================
 //              WebSocket Server
