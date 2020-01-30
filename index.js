@@ -20,6 +20,75 @@ var wsport = tcpport + 2;
 const host = '0.0.0.0';
 
 //==========================================================
+//              Console Input + Commands System
+//==========================================================
+
+var stdin = process.openStdin();
+
+stdin.addListener("data", function(d) {
+  // note:  d is an object, and when converted to a string it will
+  // end with a linefeed.  so we (rather crudely) account for that
+  // with toString() and then trim()
+  //console.log("you entered: [" + d.toString().trim() + "]");
+  var input = d.toString().trim();
+  var inputArray = input.split(" ");
+  var command = inputArray.splice(0,1);
+  var remainingText = input.replace(command.toString()+" ", "")
+  remainingText.toString();
+  switch (command.toString()) {
+    case "say":
+    console.log("Sending: '"+remainingText+"' To all clients.")
+    sockets.forEach(function(socket, index, array) { // Send update to all clients
+      socket.write('CHATServer: '+remainingText+'\n');
+      socket.write('SMSGServer: '+remainingText+'\n');
+    });
+    break;
+    default:
+    console.log("Unrecognised Command "+command);
+  }
+});
+
+//==========================================================
+//              Heartbeat System
+//==========================================================
+
+const request = require('request')
+var uid = "";
+
+request.get('http://s1.yourthought.co.uk:3599/new-server-startup', {
+  json: {}
+}, (error, res, body) => {
+  if (error) {
+    console.error(error)
+    return
+  }
+  //console.log(`statusCode: ${res.statusCode}`)
+  console.log("[Heartbeat] Server UUID received: "+body)
+  uid = body.toString();
+})
+
+setInterval(function() {
+  var info = {
+    uuid: uid,
+    players: Object.keys(players).length,
+    port: tcpport,
+    map: map
+  };
+  var options = {
+    uri: 'http://s1.yourthought.co.uk:3599/heartbeat',
+    method: 'POST',
+    json: info
+  };
+  request.post(options, (error, res, body) => {
+    if (error) {
+      console.error(error)
+      return
+    }
+    console.log(`[Heartbeat] statusCode: ${res.statusCode}, responce: ${body}`)
+  })
+}, 10 * 1000)
+
+//==========================================================
 //              WebSocket Server
 //==========================================================
 
@@ -84,46 +153,46 @@ TCPserver.on('connection', function(sock) {
 
     if (code != "PING") {
       //console.log(code)
-  	}
-  	//if (data.length > 4) {
-  	  //console.log(data.length)
-  	//}
+    }
+    //if (data.length > 4) {
+    //console.log(data.length)
+    //}
 
     switch (code) {
       case "PING":
-        //console.log("Ping Received")
-        sock.write('PONG\n');
-        break;
+      //console.log("Ping Received")
+      sock.write('PONG\n');
+      break;
       case "CHAT":
-        sockets.forEach(function(socket, index, array) { // Send update to all clients
-          socket.write(data+'\n');
-        });
-        break;
+      sockets.forEach(function(socket, index, array) { // Send update to all clients
+        socket.write(data+'\n');
+      });
+      break;
       case "MAPS":
-        map = message;
-        console.log("Setting map to: "+map);
-        sock.write("MAPC"+map+'\n');
-        break;
+      map = message;
+      console.log("Setting map to: "+map);
+      sock.write("MAPC"+map+'\n');
+      break;
       case "USER":
-        players.forEach(function(player, index, array) {
-          if (player.remoteAddress == sock.remoteAddress && player.remotePort == sock.remotePort) {
-            console.log("Player Found ("+player.id+"), setting nickname("+data.substr(4)+")");
-            player.nickname = ""+data.substr(4)+"";
-            sockets.forEach(function(socket, index, array) { // Send update to all clients
-              socket.write('PLST'+JSON.stringify(players)+'\n');
-              socket.write('SMSG'+data.substr(4)+' Just Joined the Session.\n');
-            });
-          }
-        });
-        break;
+      players.forEach(function(player, index, array) {
+        if (player.remoteAddress == sock.remoteAddress && player.remotePort == sock.remotePort) {
+          console.log("Player Found ("+player.id+"), setting nickname("+data.substr(4)+")");
+          player.nickname = ""+data.substr(4)+"";
+          sockets.forEach(function(socket, index, array) { // Send update to all clients
+            socket.write('PLST'+JSON.stringify(players)+'\n');
+            socket.write('SMSG'+data.substr(4)+' Just Joined the Session.\n');
+          });
+        }
+      });
+      break;
       case "QUIT":
       case "2001":
-        let index = sockets.findIndex(function(o) {
-          return o.remoteAddress === sock.remoteAddress && o.remotePort === sock.remotePort;
-        })
-        if (index !== -1) sockets.splice(index, 1);
-        console.log('CLOSED: ' + sock.remoteAddress + ' ' + sock.remotePort);
-        break;
+      let index = sockets.findIndex(function(o) {
+        return o.remoteAddress === sock.remoteAddress && o.remotePort === sock.remotePort;
+      })
+      if (index !== -1) sockets.splice(index, 1);
+      console.log('CLOSED: ' + sock.remoteAddress + ' ' + sock.remotePort);
+      break;
       case "U-VI":
       case "U-VE":
       case "U-VN":
@@ -131,48 +200,48 @@ TCPserver.on('connection', function(sock) {
       case "U-VL":
       case "U-VR":
       case "U-VV":
-        //console.log(data)
-        //players.forEach(function(player, index, array) {
-        //if (player.remoteAddress != sock.remoteAddress) {
-        //console.log(player.remoteAddress+' != '+sock.remoteAddress+' Is not the same so we should send?')
-        //console.log("Got Update to send!")
-        sockets.forEach(function(socket, index, array) { // Send update to all clients
-          //console.log(socket.remotePort+' != '+sock.remotePort+' Is not the same so we should send?')
-          if ((sock.remoteAddress != socket.remoteAddress && sock.remotePort != socket.remotePort) || (sock.remoteAddress == socket.remoteAddress && sock.remotePort != socket.remotePort)) {
-            socket.write(data+'\n');
-          }
-        });
-        //}
-        //});
-        break;
-      case "U-VC":
-        sockets.forEach(function(socket, index, array) { // Send update to all clients
+      //console.log(data)
+      //players.forEach(function(player, index, array) {
+      //if (player.remoteAddress != sock.remoteAddress) {
+      //console.log(player.remoteAddress+' != '+sock.remoteAddress+' Is not the same so we should send?')
+      //console.log("Got Update to send!")
+      sockets.forEach(function(socket, index, array) { // Send update to all clients
+        //console.log(socket.remotePort+' != '+sock.remotePort+' Is not the same so we should send?')
+        if ((sock.remoteAddress != socket.remoteAddress && sock.remotePort != socket.remotePort) || (sock.remoteAddress == socket.remoteAddress && sock.remotePort != socket.remotePort)) {
           socket.write(data+'\n');
-        });
-        break;
+        }
+      });
+      //}
+      //});
+      break;
+      case "U-VC":
+      sockets.forEach(function(socket, index, array) { // Send update to all clients
+        socket.write(data+'\n');
+      });
+      break;
       case "U-NV":
-        console.log(message)
-        var vid = uuidv4();
+      console.log(message)
+      var vid = uuidv4();
 
-        break;
+      break;
       case "C-VS": // Client has changed vehicle. lets update our records.
-        console.log(message)
-        players.forEach(function(player, index, array) {
-          if (player.currentVehID != message && player.remoteAddress == sock.remoteAddress && player.remotePort == sock.remotePort) {
-            console.log(chalk.green('[TCP]')+" Player Found ("+player.id+"), updating current vehile("+message+")");
-            player.currentVehID = message;
-          }
-        });
-        break;
+      console.log(message)
+      players.forEach(function(player, index, array) {
+        if (player.currentVehID != message && player.remoteAddress == sock.remoteAddress && player.remotePort == sock.remotePort) {
+          console.log(chalk.green('[TCP]')+" Player Found ("+player.id+"), updating current vehile("+message+")");
+          player.currentVehID = message;
+        }
+      });
+      break;
       default:
-        console.log(chalk.green('[TCP]')+' Unknown / unhandled data from:' + sock.remoteAddress);
-        console.log(chalk.green('[TCP]')+' Data -> ' + data);
-        sockets.forEach(function(socket, index, array) { // Send update to all clients
-          //if ((sock.remoteAddress != socket.remoteAddress && sock.remotePort != socket.remotePort) || (sock.remoteAddress == socket.remoteAddress && sock.remotePort != socket.remotePort)) {
-            socket.write(data+'\n');
-          //}
-        });
-        break;
+      console.log(chalk.green('[TCP]')+' Unknown / unhandled data from:' + sock.remoteAddress);
+      console.log(chalk.green('[TCP]')+' Data -> ' + data);
+      sockets.forEach(function(socket, index, array) { // Send update to all clients
+        //if ((sock.remoteAddress != socket.remoteAddress && sock.remotePort != socket.remotePort) || (sock.remoteAddress == socket.remoteAddress && sock.remotePort != socket.remotePort)) {
+        socket.write(data+'\n');
+        //}
+      });
+      break;
     }
     sockets.forEach(function(sock, index, array) {
       //sock.write(sock.remoteAddress + ':' + sock.remotePort + " said " + data + '\n');
@@ -185,7 +254,7 @@ TCPserver.on('connection', function(sock) {
       return o.remoteAddress === sock.remoteAddress && o.remotePort === sock.remotePort;
     })
     if (index !== -1) sockets.splice(index, 1);
-     index = sockets.findIndex(function(o) {
+    index = sockets.findIndex(function(o) {
       return o.remoteAddress === sock.remoteAddress && o.remotePort === sock.remotePort;
     })
     if (index !== -1) sockets.splice(index, 1);
@@ -211,7 +280,7 @@ TCPserver.on('connection', function(sock) {
         return o.remoteAddress === sock.remoteAddress && o.remotePort === sock.remotePort;
       })
       if (index !== -1) sockets.splice(index, 1);
-       index = sockets.findIndex(function(o) {
+      index = sockets.findIndex(function(o) {
         return o.remoteAddress === sock.remoteAddress && o.remotePort === sock.remotePort;
       })
       if (index !== -1) sockets.splice(index, 1);
@@ -296,53 +365,37 @@ UDPserver.on('message',function(msg,rinfo){
   data = str.trim(); //replace(/\r?\n|\r/g, "");
   var code = data.substring(0, 4);
   //if (code != "PING") {
-    //console.log(msg.toString());
+  //console.log(msg.toString());
   //}
   switch (code) {
     case "PING":
-      UDPsend("PONG", rinfo)
-      break;
+    UDPsend("PONG", rinfo)
+    break;
     case "U-VC":
-      for (var client in clients) {
-        client = JSON.parse(client);
-        var port = client[1];
-        var address = client[0];
-        UDPserver.send(msg, 0, msg.length, port, address, function(error){
-          if (error) {
-            console.log("ERROR");
-            console.log(error);
-            client.close();
-          };
-        });
-      }
-      break;
+    for (var client in clients) {
+      client = JSON.parse(client);
+      var port = client[1];
+      var address = client[0];
+      UDPserver.send(msg, 0, msg.length, port, address, function(error){
+        if (error) {
+          console.log("ERROR");
+          console.log(error);
+          client.close();
+        };
+      });
+    }
+    break;
     case "U-VR":
     case "U-VL":
     case "U-VP":
     case "U-VN":
     case "U-VE":
     case "U-VI":
-      for (var client in clients) {
-        client = JSON.parse(client);
-        var port = client[1];
-        var address = client[0];
-        if (port != rinfo.port && address != rinfo.address) {
-          UDPserver.send(msg, 0, msg.length, port, address, function(error){
-            if (error) {
-              console.log("ERROR");
-              console.log(error);
-              client.close();
-            };
-          });
-        }
-      }
-      break;
-    default:
-      // Unhandled data, this at the moment includes the extra packets of vehicles so it needs to be here until it is handled correctly
-      for (var client in clients) {
-        client = JSON.parse(client);
-        var port = client[1];
-        var address = client[0];
+    for (var client in clients) {
+      client = JSON.parse(client);
+      var port = client[1];
+      var address = client[0];
+      if (port != rinfo.port && address != rinfo.address) {
         UDPserver.send(msg, 0, msg.length, port, address, function(error){
           if (error) {
             console.log("ERROR");
@@ -351,8 +404,24 @@ UDPserver.on('message',function(msg,rinfo){
           };
         });
       }
-      //console.log(chalk.rgb(123, 45, 67)('[UDP]')+' Data received from client : ' + msg.toString());
-      //console.log(chalk.rgb(123, 45, 67)('[UDP]')+' Received %d bytes from %s:%d\n',msg.length, rinfo.address, rinfo.port);
+    }
+    break;
+    default:
+    // Unhandled data, this at the moment includes the extra packets of vehicles so it needs to be here until it is handled correctly
+    for (var client in clients) {
+      client = JSON.parse(client);
+      var port = client[1];
+      var address = client[0];
+      UDPserver.send(msg, 0, msg.length, port, address, function(error){
+        if (error) {
+          console.log("ERROR");
+          console.log(error);
+          client.close();
+        };
+      });
+    }
+    //console.log(chalk.rgb(123, 45, 67)('[UDP]')+' Data received from client : ' + msg.toString());
+    //console.log(chalk.rgb(123, 45, 67)('[UDP]')+' Received %d bytes from %s:%d\n',msg.length, rinfo.address, rinfo.port);
   }
 });
 
