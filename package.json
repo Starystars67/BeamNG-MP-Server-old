@@ -8,9 +8,6 @@
   },
   "author": "Mitch Durso",
   "license": "ISC",
-  "devDependencies": {
-    "electron": "^6.0.7"
-  },
   "dependencies": {
     "chalk": "^3.0.0",
     "minimist": "^1.2.0",
