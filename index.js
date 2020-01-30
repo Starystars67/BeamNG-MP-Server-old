@@ -1,10 +1,12 @@
 // Server Settings!
 var map = "";
+var name = "New Test Server. ";
 let _VERSION = "0.0.3"
 let UDPExpireTime = 30// In Seconds
 
 const net = require('net');
 const uuidv4 = require('uuid/v4');
+var validator = require('validator');
 const args = require('minimist')(process.argv.slice(2));
 const chalk = require("chalk")
 
@@ -42,6 +44,10 @@ stdin.addListener("data", function(d) {
       socket.write('CHATServer: '+remainingText+'\n');
       socket.write('SMSGServer: '+remainingText+'\n');
     });
+    break;
+    case "set_svname":
+    console.log("Setting Server Name To '"+remainingText+"'")
+    name = remainingText;
     break;
     default:
     console.log("Unrecognised Command "+command);
@@ -84,7 +90,12 @@ setInterval(function() {
       console.error(error)
       return
     }
-    console.log(`[Heartbeat] statusCode: ${res.statusCode}, responce: ${body}`)
+    if (validator.isUUID(body)) {
+      console.log("[Heartbeat] Server UUID received: "+body)
+      uid = body.toString();
+    } else {
+      console.log(`[Heartbeat] statusCode: ${res.statusCode}, responce: ${body}`)
+    }
   })
 }, 15 * 1000)
 
