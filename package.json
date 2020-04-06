@@ -10,7 +10,7 @@
   "license": "ISC",
   "dependencies": {
     "chalk": "^3.0.0",
-    "minimist": "^1.2.0",
+    "minimist": "^1.2.3",
     "request": "^2.88.0",
     "uuid": "^3.3.3",
     "validator": "^12.2.0",
